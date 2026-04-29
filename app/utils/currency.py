@@ -133,7 +133,9 @@ def format_currency(
         '1,234.50 €'
     """
     if symbol_position not in ("before", "after"):
-        raise ValueError(f"symbol_position must be 'before' or 'after', got {symbol_position!r}")
+        raise ValueError(
+            f"symbol_position must be 'before' or 'after', got {symbol_position!r}"
+        )
 
     _SYMBOLS: dict[str, str] = {
         "USD": "$",
@@ -170,7 +172,11 @@ def format_currency(
     formatted_int = thousands_sep.join(reversed(groups))
 
     # Reassemble
-    number_str = f"{formatted_int}{decimal_sep}{frac_part}" if decimal_places > 0 else formatted_int
+    number_str = (
+        f"{formatted_int}{decimal_sep}{frac_part}"
+        if decimal_places > 0
+        else formatted_int
+    )
     if negative:
         number_str = f"-{number_str}"
 

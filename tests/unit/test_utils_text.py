@@ -101,7 +101,10 @@ class TestTruncate:
 
 class TestMaskString:
     def test_mask_middle(self):
-        assert mask_string("4111111111111111", visible_start=0, visible_end=4) == "************1111"
+        assert (
+            mask_string("4111111111111111", visible_start=0, visible_end=4)
+            == "************1111"
+        )
 
     def test_visible_start_and_end(self):
         result = mask_string("user@example.com", visible_start=2, visible_end=4)

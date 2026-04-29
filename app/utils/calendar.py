@@ -135,7 +135,9 @@ def working_days_between(
     Returns:
         Number of working days.
     """
-    return sum(1 for d in date_range(start, end) if is_working_day(d, holidays=holidays))
+    return sum(
+        1 for d in date_range(start, end) if is_working_day(d, holidays=holidays)
+    )
 
 
 def next_working_day(
@@ -225,7 +227,9 @@ def to_timezone(dt: datetime, tz: timezone | str) -> datetime:
             unrecognised string is passed for *tz*.
     """
     if dt.tzinfo is None:
-        raise ValueError("dt must be timezone-aware; use utcnow() or attach tzinfo first.")
+        raise ValueError(
+            "dt must be timezone-aware; use utcnow() or attach tzinfo first."
+        )
     if isinstance(tz, str):
         if tz.upper() == "UTC":
             tz = UTC

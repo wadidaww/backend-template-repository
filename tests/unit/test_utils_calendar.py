@@ -130,18 +130,18 @@ class TestIsWorkingDay:
 class TestWorkingDaysBetween:
     def test_full_week(self):
         # Mon–Fri = 5 working days; end is exclusive
-        start = date(2024, 1, 8)   # Monday
-        end = date(2024, 1, 13)    # Saturday (exclusive)
+        start = date(2024, 1, 8)  # Monday
+        end = date(2024, 1, 13)  # Saturday (exclusive)
         assert working_days_between(start, end) == 5
 
     def test_weekend_excluded(self):
-        start = date(2024, 1, 8)   # Monday
-        end = date(2024, 1, 15)    # Next Monday (exclusive)
+        start = date(2024, 1, 8)  # Monday
+        end = date(2024, 1, 15)  # Next Monday (exclusive)
         assert working_days_between(start, end) == 5
 
     def test_with_holiday(self):
-        start = date(2024, 1, 8)   # Monday
-        end = date(2024, 1, 13)    # Saturday (exclusive)
+        start = date(2024, 1, 8)  # Monday
+        end = date(2024, 1, 13)  # Saturday (exclusive)
         holiday = date(2024, 1, 10)  # Wednesday
         assert working_days_between(start, end, holidays={holiday}) == 4
 
