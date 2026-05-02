@@ -1,9 +1,8 @@
 """Shared test fixtures."""
-import json
+import base64
 from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
@@ -22,9 +21,7 @@ TEST_KID = "test-key-id"
 TEST_SUB = "auth0|testuser123"
 
 # Build a minimal JWKS from the generated public key.
-_pub_numbers = _public_key.public_key().public_numbers() if hasattr(_public_key, "public_key") else _public_key.public_numbers()
-
-import base64, math
+_pub_numbers = _public_key.public_numbers()
 
 
 def _int_to_base64url(n: int) -> str:
