@@ -3,7 +3,7 @@ from __future__ import annotations
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
+from app.modules.users.models import User
 
 
 class TestListUsers:
@@ -99,6 +99,42 @@ class TestUpdateUser:
         )
         assert response.status_code == 403
 
+    async def test_user_cannot_change_own_active_flag(
+        self,
+        authenticated_client: AsyncClient,
+        test_user: User,
+    ):
+        response = await authenticated_client.patch(
+            f"/api/v1/users/{test_user.id}",
+            json={"is_active": False},
+        )
+        assert response.status_code == 403
+
+    async def test_update_to_taken_email_conflicts(
+        self,
+        authenticated_client: AsyncClient,
+        test_user: User,
+        superuser: User,
+    ):
+        response = await authenticated_client.patch(
+            f"/api/v1/users/{test_user.id}",
+            json={"email": superuser.email},
+        )
+        assert response.status_code == 409
+
+
+class TestTokenTypes:
+    async def test_refresh_token_cannot_be_used_as_access_token(
+        self, client: AsyncClient, test_user: User
+    ):
+        from app.core.security import create_refresh_token
+
+        token = create_refresh_token({"sub": test_user.id})
+        response = await client.get(
+            "/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert response.status_code == 401
+
 
 class TestDeleteUser:
     async def test_superuser_can_delete_user(
@@ -107,7 +143,7 @@ class TestDeleteUser:
         db_session: AsyncSession,
     ):
         from app.core.security import get_password_hash
-        from app.models.user import User
+        from app.modules.users.models import User
 
         user_to_delete = User(
             email="todelete@example.com",

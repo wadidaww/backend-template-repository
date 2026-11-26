@@ -4,39 +4,36 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
+from slowapi.middleware import SlowAPIMiddleware
 
-from app.api.v1.router import api_router
+from app.api.router import api_router
+from app.common.exception_handlers import add_exception_handlers
+from app.common.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
 from app.core.config import get_settings
 from app.core.logging import setup_logging
+from app.core.rate_limit import limiter
+from app.core.redis import close_redis
 from app.db.session import close_db, init_db
-from app.exceptions.handlers import add_exception_handlers
-from app.middleware.logging import LoggingMiddleware
 
 logger = structlog.get_logger(__name__)
-
-limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     setup_logging(settings.APP_ENV)
-
     init_db(
         settings.DATABASE_URL,
-        echo=settings.is_development,
+        echo=False,
+        pool_size=settings.DATABASE_POOL_SIZE,
+        max_overflow=settings.DATABASE_MAX_OVERFLOW,
     )
     logger.info("application_startup", env=settings.APP_ENV)
-
     yield
-
     await close_db()
+    await close_redis()
     logger.info("application_shutdown")
 
 
@@ -44,19 +41,21 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(
-        title="Backend Template API",
-        description="Production-ready FastAPI backend template",
-        version="0.1.0",
-        docs_url="/docs" if not settings.is_production else None,
-        redoc_url="/redoc" if not settings.is_production else None,
+        title=settings.APP_NAME,
+        version=settings.APP_VERSION,
+        docs_url=None if settings.is_production else "/docs",
+        redoc_url=None if settings.is_production else "/redoc",
         lifespan=lifespan,
     )
 
-    # Rate limiter state
     app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    add_exception_handlers(app)
 
-    # CORS
+    # Starlette runs middleware in reverse order of registration: the last one
+    # added is the outermost. Request context wraps everything so every log line
+    # and error response carries the request ID.
+    app.add_middleware(SlowAPIMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware, hsts=settings.is_production)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins_list,
@@ -64,34 +63,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RequestContextMiddleware)
 
-    # Request / response logging
-    app.add_middleware(LoggingMiddleware)
-
-    # Security headers middleware
-    @app.middleware("http")
-    async def add_security_headers(request: Request, call_next) -> JSONResponse:
-        response = await call_next(request)
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        if settings.is_production:
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains"
-            )
-        return response
-
-    # Custom exception handlers
-    add_exception_handlers(app)
-
-    # Versioned API routes
     app.include_router(api_router, prefix="/api/v1")
-
-    # Root health check
-    @app.get("/health", tags=["health"])
-    async def health_check() -> dict:
-        return {"status": "ok", "env": settings.APP_ENV}
-
     return app
 
 

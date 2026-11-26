@@ -1,45 +1,43 @@
-[tool.poetry]
+[project]
 name = "backend-template"
-version = "0.1.0"
-description = "Production-ready FastAPI backend template"
-authors = ["Backend Team"]
+version = "0.2.0"
+description = "Reusable, typed FastAPI backend template"
 readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "alembic>=1.14",
+    "asyncpg>=0.30",
+    "aiosqlite>=0.20",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.6",
+    "email-validator>=2.2",
+    "pyjwt[crypto]>=2.10",
+    "bcrypt>=4.2",
+    "redis[hiredis]>=5.2",
+    "celery[redis]>=5.4",
+    "httpx>=0.28",
+    "slowapi>=0.1.9",
+    "structlog>=24.4",
+]
 
-[tool.poetry.dependencies]
-python = "^3.12"
-fastapi = "^0.115.0"
-uvicorn = {extras = ["standard"], version = "^0.32.0"}
-sqlalchemy = {extras = ["asyncio"], version = "^2.0.36"}
-alembic = "^1.14.0"
-asyncpg = "^0.30.0"
-aiosqlite = "^0.20.0"
-pydantic = "^2.10.0"
-pydantic-settings = "^2.6.0"
-python-jose = {extras = ["cryptography"], version = "^3.4.0"}
-passlib = {extras = ["bcrypt"], version = "^1.7.4"}
-redis = {extras = ["hiredis"], version = "^5.2.0"}
-celery = {extras = ["redis"], version = "^5.4.0"}
-python-multipart = "^0.0.22"
-email-validator = "^2.2.0"
-httpx = "^0.28.0"
-python-json-logger = "^3.2.0"
-slowapi = "^0.1.9"
-structlog = "^24.4.0"
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "factory-boy>=3.3",
+    "faker>=33.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pre-commit>=4.0",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.0"
-pytest-asyncio = "^0.24.0"
-pytest-cov = "^6.0.0"
-factory-boy = "^3.3.0"
-faker = "^33.0.0"
-httpx = "^0.28.0"
-ruff = "^0.8.0"
-pre-commit = "^4.0.0"
-anyio = {extras = ["trio"], version = "^4.7.0"}
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.uv]
+package = false
 
 [tool.ruff]
 target-version = "py312"
@@ -52,8 +50,29 @@ ignore = ["E501", "B008", "C901"]
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
 
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["app", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["celery", "celery.*", "slowapi", "slowapi.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["factory", "factory.*"]
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_subclassing_any = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
