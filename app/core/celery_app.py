@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 from celery import Celery
+
+from app.core.config import get_settings
 
 
 def create_celery_app() -> Celery:
-    from app.core.config import get_settings
-
     settings = get_settings()
 
     celery = Celery(
@@ -11,7 +13,6 @@ def create_celery_app() -> Celery:
         broker=settings.CELERY_BROKER_URL,
         backend=settings.CELERY_RESULT_BACKEND,
     )
-
     celery.conf.update(
         task_serializer="json",
         accept_content=["json"],
@@ -22,10 +23,10 @@ def create_celery_app() -> Celery:
         worker_prefetch_multiplier=1,
         task_acks_late=True,
         broker_connection_retry_on_startup=True,
+        task_always_eager=settings.is_testing,
     )
-
-    celery.autodiscover_tasks(["app.tasks"])
-
+    # Each module keeps its tasks in app/modules/<name>/tasks.py
+    celery.autodiscover_tasks(["app.modules.notifications"])
     return celery
 
 

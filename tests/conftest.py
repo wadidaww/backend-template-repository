@@ -16,7 +16,6 @@ os.environ.update(
     {
         "APP_ENV": "testing",
         "DATABASE_URL": "sqlite+aiosqlite:///./test_app.db",
-        "TEST_DATABASE_URL": "sqlite+aiosqlite:///./test_app.db",
         "SECRET_KEY": "test-secret-key-for-testing-only-not-for-production",
         "ALGORITHM": "HS256",
         "ACCESS_TOKEN_EXPIRE_MINUTES": "30",
@@ -26,12 +25,14 @@ os.environ.update(
         "CELERY_RESULT_BACKEND": "redis://localhost:6379/2",
         "ALLOWED_ORIGINS": "http://localhost:3000",
         "RATE_LIMIT_TIMES": "1000",
+        "RATE_LIMIT_STORAGE_URL": "memory://",
         "RATE_LIMIT_SECONDS": "60",
     }
 )
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Iterator
 
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -41,11 +42,12 @@ from app.core.config import get_settings
 
 get_settings.cache_clear()
 
+from app.core.rate_limit import limiter  # noqa: E402
 from app.core.security import create_access_token, get_password_hash  # noqa: E402
 from app.db.base import Base  # noqa: E402
 from app.db.session import get_db  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models.user import User  # noqa: E402
+from app.modules.users.models import User  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Test database engine (SQLite, isolated per test run)
@@ -68,6 +70,13 @@ TestSessionLocal = async_sessionmaker(
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits() -> Iterator[None]:
+    """Rate-limit counters are in memory during tests; start each test clean."""
+    limiter.reset()
+    yield
 
 
 @pytest_asyncio.fixture(scope="function")

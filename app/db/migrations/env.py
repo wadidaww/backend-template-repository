@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import models so they are registered with Base.metadata
 from app.db.base import Base
-from app.models import user as _user_module  # noqa: F401
+from app.modules.users import models as _users_models  # noqa: F401
 
 config = context.config
 

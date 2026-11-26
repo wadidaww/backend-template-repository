@@ -1,315 +1,158 @@
 # Backend Template Repository
 
-A production-ready FastAPI backend template with async SQLAlchemy, JWT auth, Redis caching, Celery tasks, and a full test suite.
+A reusable, fully typed FastAPI backend to start new web platforms from. Features live in self-contained modules under `app/modules/`, so a new project keeps what it needs and deletes the rest.
 
-## Tech Stack
+The roadmap (Auth0, multi-tenancy, partner API gateway, secure key exchange, WebSockets, TCP/UDP, QRIS and international payments via Xendit, and more) is built one module at a time.
+
+## Tech stack
 
 | Layer | Technology |
 |---|---|
-| Web framework | FastAPI 0.115 |
-| ORM | SQLAlchemy 2.0 (async) |
-| Migrations | Alembic |
-| Primary DB | PostgreSQL 16 |
-| Test DB | SQLite + aiosqlite |
-| Auth | JWT (python-jose) + bcrypt (passlib) |
-| Cache / queue | Redis 7 |
-| Background tasks | Celery 5 |
-| Settings | Pydantic Settings v2 + `.env` |
-| Logging | structlog (JSON in prod, pretty in dev) |
-| Validation | Pydantic v2 |
-| Rate limiting | slowapi |
-| Python | 3.12+ |
-| Package manager | Poetry |
-| Linter / formatter | Ruff |
-| Testing | pytest + pytest-asyncio + factory-boy + httpx |
-| CI | GitHub Actions |
-| Containers | Docker + docker-compose |
+| Web framework | FastAPI |
+| ORM / migrations | SQLAlchemy 2 (async) / Alembic |
+| Database | PostgreSQL 16 (SQLite for tests) |
+| Auth | JWT (PyJWT) + bcrypt |
+| Cache, rate-limit store, broker | Redis 7 |
+| Background jobs | Celery |
+| Rate limiting | slowapi (Redis-backed, shared across workers) |
+| Settings | Pydantic Settings, validated at startup |
+| Logging | structlog (JSON in production, pretty in dev) with request IDs |
+| Python / packaging | Python 3.12+, [uv](https://docs.astral.sh/uv/) with a committed `uv.lock` |
+| Quality | Ruff (lint + format), mypy `--strict`, pytest |
+| CI / containers | GitHub Actions, Docker, docker compose |
 
----
-
-## Quick Start
-
-### Prerequisites
-
-- Python 3.12+
-- Poetry (`pip install poetry`)
-- Docker & docker-compose (optional, for full stack)
-
-### Local development (SQLite)
+## Quick start
 
 ```bash
-# 1. Clone and enter the repo
-git clone <repo-url>
-cd backend-template-repository
-
-# 2. Install dependencies
+# 1. Install uv: https://docs.astral.sh/uv/getting-started/installation/
+# 2. Install dependencies (creates .venv from uv.lock)
 make install
-# or: poetry install
 
-# 3. Copy and edit environment file
-cp .env.example .env
-# Edit SECRET_KEY and DATABASE_URL at minimum
+# 3. Configure
+cp .env.example .env        # set SECRET_KEY and DATABASE_URL at minimum
 
-# 4. Run database migrations
+# 4. Create the schema and run
 make migrate
-
-# 5. Start the dev server
-make dev
-# → http://localhost:8000
-# → http://localhost:8000/docs  (Swagger UI)
-# → http://localhost:8000/redoc (ReDoc)
+make dev                    # http://localhost:8000/docs
 ```
 
-### Docker Compose (full stack)
+Full stack with Postgres, Redis and a Celery worker:
 
 ```bash
-# Start Postgres, Redis, API server, and Celery worker
-docker-compose up -d
-
-# Apply migrations inside the container
-docker-compose exec web alembic upgrade head
-
-# View logs
-make docker-logs
+docker compose up -d
+docker compose exec web alembic upgrade head
 ```
 
----
-
-## Project Structure
+## Project structure
 
 ```
-.
-├── app/
-│   ├── api/
-│   │   └── v1/
-│   │       ├── endpoints/
-│   │       │   ├── auth.py        # register, login, refresh, /me
-│   │       │   ├── users.py       # CRUD (superuser-protected)
-│   │       │   └── health.py      # /api/v1/health/
-│   │       └── router.py
-│   ├── core/
-│   │   ├── config.py              # Pydantic Settings + lru_cache
-│   │   ├── security.py            # JWT helpers, password hashing
-│   │   ├── redis.py               # Async Redis client
-│   │   ├── celery_app.py          # Celery factory
-│   │   └── logging.py             # structlog setup
-│   ├── db/
-│   │   ├── base.py                # DeclarativeBase + BaseModel (UUID PK, timestamps)
-│   │   ├── session.py             # init_db(), get_db(), close_db()
-│   │   └── migrations/            # Alembic env + versions
-│   ├── models/
-│   │   └── user.py                # User SQLAlchemy model
-│   ├── schemas/
-│   │   ├── auth.py                # LoginRequest, TokenResponse, ...
-│   │   ├── user.py                # UserCreate, UserResponse, ...
-│   │   └── common.py              # PaginationParams, PagedResponse
-│   ├── repositories/
-│   │   ├── base.py                # Generic CRUD repository
-│   │   └── user.py                # UserRepository
-│   ├── services/
-│   │   ├── auth.py                # AuthService (register, login, refresh)
-│   │   └── user.py                # UserService (CRUD)
-│   ├── tasks/
-│   │   └── email.py               # Celery email tasks
-│   ├── middleware/
-│   │   └── logging.py             # Request/response logging + X-Request-ID
-│   ├── dependencies/
-│   │   ├── db.py                  # get_db re-export
-│   │   └── auth.py                # get_current_user, require_superuser
-│   ├── exceptions/
-│   │   ├── base.py                # AppException hierarchy
-│   │   └── handlers.py            # FastAPI exception handlers
-│   └── main.py                    # App factory, lifespan, middleware
-├── tests/
-│   ├── conftest.py                # Fixtures: db_session, client, test_user, ...
-│   ├── factories/user.py          # factory_boy UserFactory
-│   ├── unit/                      # Pure unit tests (mocked deps)
-│   └── integration/               # End-to-end HTTP tests (SQLite)
-├── Dockerfile                     # Multi-stage production image
-├── docker-compose.yml             # Dev stack
-├── docker-compose.prod.yml        # Production stack
-├── pyproject.toml                 # Poetry + Ruff + pytest config
-├── alembic.ini                    # Alembic config
-├── Makefile                       # Common tasks
-└── .env.example                   # Environment template
+app/
+├── main.py                 # App factory: middleware, exception handlers, routers
+├── api/router.py           # Mounts each module's router under /api/v1
+├── core/                   # Cross-cutting infrastructure
+│   ├── config.py           # Settings + production safety checks
+│   ├── clock.py            # utc_now() and frozen_clock() for tests
+│   ├── security/           # passwords.py (bcrypt), tokens.py (JWT)
+│   ├── rate_limit.py       # Global limiter, typed limit()/exempt() helpers
+│   ├── redis.py, celery_app.py, logging.py
+├── common/                 # Shared building blocks
+│   ├── repository.py       # Generic async CRUD repository
+│   ├── schemas.py          # Pagination, PagedResponse
+│   ├── exceptions.py       # AppException hierarchy
+│   ├── exception_handlers.py
+│   └── middleware.py       # Request ID + logging, security headers
+├── db/                     # Declarative base, session, Alembic migrations
+├── modules/                # One folder per feature
+│   ├── auth/               # Register, login, refresh, current-user dependencies
+│   ├── users/              # User model, repository, service, CRUD routes
+│   ├── health/             # Liveness and readiness probes
+│   └── notifications/      # Email tasks (provider integration coming)
+└── utils/                  # Date/time, currency (Decimal), text helpers
+tests/
+├── unit/                   # No I/O
+└── integration/            # HTTP + SQLite, migrations, rate limits
 ```
 
----
+### Adding a module
 
-## Environment Variables
+1. Create `app/modules/<name>/` with `models.py`, `schemas.py`, `repository.py` (extend `BaseRepository`), `service.py`, `router.py`.
+2. Mount the router in `app/api/router.py`.
+3. Import the models in `app/db/migrations/env.py`, then `make migrate-create msg="add <name>"`.
+4. Put Celery tasks in `app/modules/<name>/tasks.py` and add the module to `autodiscover_tasks` in `app/core/celery_app.py`.
+5. Add unit and integration tests. `make check` must pass.
 
-Copy `.env.example` to `.env` and fill in the values:
+To remove a module, delete its folder and its line in `app/api/router.py`.
 
-| Variable | Default | Description |
+## Configuration
+
+Copy `.env.example` to `.env`. Key variables:
+
+| Variable | Default | Notes |
 |---|---|---|
-| `APP_ENV` | `development` | `development` / `testing` / `production` |
-| `SECRET_KEY` | *(required)* | HS256 signing key (min 32 chars) |
-| `ALGORITHM` | `HS256` | JWT algorithm |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access token TTL |
-| `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Refresh token TTL |
-| `DATABASE_URL` | postgres URL | Async SQLAlchemy URL |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection |
-| `CELERY_BROKER_URL` | `redis://localhost:6379/1` | Celery broker |
-| `CELERY_RESULT_BACKEND` | `redis://localhost:6379/2` | Celery results |
-| `ALLOWED_ORIGINS` | `http://localhost:3000,...` | Comma-separated CORS origins |
-| `RATE_LIMIT_TIMES` | `100` | Requests allowed per window |
-| `RATE_LIMIT_SECONDS` | `60` | Rate limit window in seconds |
+| `APP_ENV` | `development` | `development`, `testing`, `staging`, `production` |
+| `SECRET_KEY` | dev placeholder | 32+ chars. Staging/production refuse to start with the default |
+| `ALGORITHM` | `HS256` | `HS256`, `HS384` or `HS512` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` / `REFRESH_TOKEN_EXPIRE_DAYS` | `30` / `7` | |
+| `DATABASE_URL` | local Postgres | SQLite is rejected in staging/production |
+| `DATABASE_POOL_SIZE` / `DATABASE_MAX_OVERFLOW` | `10` / `20` | |
+| `REDIS_URL` | `redis://localhost:6379/0` | |
+| `CELERY_BROKER_URL` / `CELERY_RESULT_BACKEND` | Redis DB 1 / 2 | |
+| `ALLOWED_ORIGINS` | localhost | Comma-separated. `*` is rejected in staging/production |
+| `RATE_LIMIT_ENABLED` | `true` | |
+| `RATE_LIMIT_TIMES` / `RATE_LIMIT_SECONDS` | `100` / `60` | Default limit for every route |
+| `RATE_LIMIT_STORAGE_URL` | empty (= `REDIS_URL`) | `memory://` for a single process |
 
----
-
-## API Endpoints
-
-### Auth (`/api/v1/auth`)
+## API
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| POST | `/register` | — | Register a new user |
-| POST | `/login` | — | Login, returns JWT pair |
-| POST | `/refresh` | — | Issue new access token |
-| GET | `/me` | Bearer | Current user profile |
+| POST | `/api/v1/auth/register` | none | Register (10/min per client) |
+| POST | `/api/v1/auth/login` | none | Returns access + refresh tokens (10/min) |
+| POST | `/api/v1/auth/refresh` | none | New token pair from a refresh token (10/min) |
+| GET | `/api/v1/auth/me` | Bearer | Current user |
+| GET | `/api/v1/users/` | Superuser | Paginated list |
+| GET | `/api/v1/users/me` | Bearer | Current user |
+| GET | `/api/v1/users/{id}` | Superuser | Get user |
+| PATCH | `/api/v1/users/{id}` | Self or superuser | Update (only superusers can change `is_active`) |
+| DELETE | `/api/v1/users/{id}` | Superuser | Delete |
+| GET | `/api/v1/health/live` | none | Process is up |
+| GET | `/api/v1/health/ready` | none | Database and Redis reachable, else 503 |
 
-### Users (`/api/v1/users`)
+Every response carries `X-Request-ID` (an incoming safe value is reused). Rate-limited responses include `X-RateLimit-*` headers; a 429 includes `Retry-After`.
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/` | Superuser | List all users (paginated) |
-| GET | `/me` | Bearer | Current user profile |
-| GET | `/{user_id}` | Superuser | Get user by ID |
-| PATCH | `/{user_id}` | Bearer | Update user (own or superuser) |
-| DELETE | `/{user_id}` | Superuser | Delete user |
+### Rate limits per route
 
-### Health
+```python
+from app.core import rate_limit
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | Basic health (env) |
-| GET | `/api/v1/health/` | Detailed health + version |
+@router.post("/expensive")
+@rate_limit.limit("5/minute")          # the route must accept request and response
+async def expensive(request: Request, response: Response) -> ...: ...
 
----
-
-## Running Tests
-
-```bash
-# All tests with coverage
-make test
-
-# Unit tests only
-make test-unit
-
-# Integration tests only
-make test-integration
+@router.get("/ping")
+@rate_limit.exempt
+async def ping() -> ...: ...
 ```
 
-Tests use SQLite — no external services (Redis, PostgreSQL) required.
-Each test creates fresh tables and drops them on teardown for full isolation.
-
----
-
-## Makefile Reference
+## Development
 
 ```bash
-make install          # Install Poetry dependencies
-make dev              # Run dev server with hot-reload
-make test             # Run all tests + coverage
-make test-unit        # Unit tests only
-make test-integration # Integration tests only
-make lint             # ruff check
-make format           # ruff format + fix
-make clean            # Remove __pycache__, .pytest_cache, test DB
-make migrate          # alembic upgrade head
-make migrate-create msg="add_table"  # autogenerate migration
-make docker-up        # Start docker-compose
-make docker-down      # Stop docker-compose
-make docker-logs      # Tail container logs
+make check            # ruff check, ruff format --check, mypy --strict, pytest (what CI runs)
+make test             # tests with coverage
+make format           # auto-format and fix lint
+make migrate-create msg="add_table"
+uv add <package>      # add a dependency (updates pyproject.toml and uv.lock)
+uv run pre-commit install
 ```
 
----
+Tests use SQLite and in-memory rate limits; no Postgres or Redis needed. Use `app.core.clock.frozen_clock()` to pin time in tests, and `utc_now()` instead of `datetime.now()` in code.
 
-## Database Migrations
+## Production checklist
 
-```bash
-# Create a new migration (auto-generates from model changes)
-make migrate-create msg="add_users_table"
-
-# Apply all pending migrations
-make migrate
-
-# Downgrade one step
-poetry run alembic downgrade -1
-```
-
----
-
-## Background Tasks (Celery)
-
-```bash
-# Start a worker (requires Redis)
-celery -A app.core.celery_app.celery_app worker --loglevel=info
-
-# Trigger a task from Python
-from app.tasks.email import send_welcome_email
-send_welcome_email.delay("user@example.com", "username")
-```
-
-Add new tasks in `app/tasks/`. Decorate with `@celery_app.task`.
-
----
-
-## Adding a New Resource
-
-1. **Model** — add `app/models/myresource.py` (extends `BaseModel`)
-2. **Schema** — add `app/schemas/myresource.py` (Pydantic v2)
-3. **Repository** — add `app/repositories/myresource.py` (extends `BaseRepository`)
-4. **Service** — add `app/services/myresource.py`
-5. **Endpoints** — add `app/api/v1/endpoints/myresource.py`
-6. **Router** — include in `app/api/v1/router.py`
-7. **Migration** — `make migrate-create msg="add_myresource"`
-8. **Tests** — add unit + integration tests under `tests/`
-
----
-
-## Pre-commit Hooks
-
-```bash
-# Install hooks
-poetry run pre-commit install
-
-# Run manually against all files
-poetry run pre-commit run --all-files
-```
-
-Hooks run: ruff (lint + format), trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files.
-
----
-
-## Production Deployment
-
-1. Build the image:
-   ```bash
-   docker build -t backend-template:latest .
-   ```
-
-2. Set all required environment variables (see `.env.example`).
-
-3. Run migrations before starting:
-   ```bash
-   docker run --env-file .env backend-template:latest alembic upgrade head
-   ```
-
-4. Start with docker-compose:
-   ```bash
-   docker-compose -f docker-compose.prod.yml up -d
-   ```
-
-**Security checklist for production:**
-- [ ] Set a strong, random `SECRET_KEY` (32+ chars)
-- [ ] Set `APP_ENV=production`
-- [ ] Use a managed PostgreSQL instance
-- [ ] Enable TLS termination in your reverse proxy
-- [ ] Restrict `ALLOWED_ORIGINS` to your frontend domain(s)
-- [ ] Rotate JWT secrets regularly
-
----
+- Set `APP_ENV=production`, a random `SECRET_KEY`, a managed Postgres `DATABASE_URL` and your real `ALLOWED_ORIGINS`.
+- Run `alembic upgrade head` before starting new app versions.
+- Terminate TLS at your proxy; HSTS is sent when `APP_ENV=production`.
+- Point load balancer health checks at `/api/v1/health/ready`.
 
 ## License
 

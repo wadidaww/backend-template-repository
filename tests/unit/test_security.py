@@ -4,6 +4,7 @@ from datetime import timedelta
 
 import pytest
 
+from app.common.exceptions import UnauthorizedError
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -11,7 +12,6 @@ from app.core.security import (
     verify_password,
     verify_token,
 )
-from app.exceptions.base import UnauthorizedError
 
 
 class TestPasswordHashing:
@@ -70,3 +70,40 @@ class TestJWTTokens:
         tampered = token[:-5] + "xxxxx"
         with pytest.raises(UnauthorizedError):
             verify_token(tampered)
+
+
+class TestPasswordEdgeCases:
+    def test_long_password_round_trips(self):
+        long_password = "pässwörd-" * 20  # > 72 bytes
+        hashed = get_password_hash(long_password, rounds=4)
+        assert verify_password(long_password, hashed)
+        assert not verify_password(long_password[:-1], hashed)
+
+    def test_long_passwords_sharing_prefix_differ(self):
+        base = "a" * 80
+        hashed = get_password_hash(base + "1", rounds=4)
+        assert not verify_password(base + "2", hashed)
+
+    def test_malformed_hash_returns_false(self):
+        assert verify_password("anything", "not-a-bcrypt-hash") is False
+
+
+class TestTokenEdgeCases:
+    def test_expired_token_raises(self):
+        token = create_access_token({"sub": "u1"}, expires_delta=timedelta(seconds=-1))
+        with pytest.raises(UnauthorizedError, match="expired"):
+            verify_token(token)
+
+    def test_token_without_subject_raises(self):
+        token = create_access_token({}, expires_delta=timedelta(minutes=1))
+        with pytest.raises(UnauthorizedError):
+            verify_token(token)
+
+    def test_token_signed_with_other_key_raises(self):
+        import jwt
+
+        forged = jwt.encode(
+            {"sub": "u1", "exp": 9999999999}, "another-key-" * 4, algorithm="HS256"
+        )
+        with pytest.raises(UnauthorizedError):
+            verify_token(forged)

@@ -4,10 +4,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.exceptions.base import ConflictError, UnauthorizedError
-from app.schemas.auth import LoginRequest
-from app.schemas.user import UserCreate
-from app.services.auth import AuthService
+from app.common.exceptions import ConflictError, UnauthorizedError
+from app.modules.auth.schemas import LoginRequest
+from app.modules.auth.service import AuthService
+from app.modules.users.schemas import UserCreate
 
 
 def make_mock_user(

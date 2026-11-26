@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.exceptions.base import NotFoundError
-from app.schemas.user import UserUpdate
-from app.services.user import UserService
+from app.common.exceptions import ConflictError, NotFoundError
+from app.modules.users.schemas import UserUpdate
+from app.modules.users.service import UserService
 
 
 def make_mock_user(
@@ -61,6 +61,7 @@ class TestUserService:
         updated_user = make_mock_user(email="new@example.com")
         with (
             patch.object(service.user_repo, "get_by_id", return_value=mock_user),
+            patch.object(service.user_repo, "get_by_email", return_value=None),
             patch.object(
                 service.user_repo, "update", return_value=updated_user
             ) as mock_update,
@@ -70,6 +71,16 @@ class TestUserService:
             )
             mock_update.assert_called_once()
             assert result == updated_user
+
+    async def test_update_user_email_taken_raises(self, service):
+        with (
+            patch.object(service.user_repo, "get_by_id", return_value=make_mock_user()),
+            patch.object(
+                service.user_repo, "get_by_email", return_value=make_mock_user()
+            ),
+            pytest.raises(ConflictError),
+        ):
+            await service.update_user("test-user-id", UserUpdate(email="x@example.com"))
 
     async def test_delete_user_calls_repository(self, service):
         mock_user = make_mock_user()

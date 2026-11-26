@@ -4,7 +4,7 @@ import factory
 from factory import LazyFunction
 
 from app.core.security import get_password_hash
-from app.models.user import User
+from app.modules.users.models import User
 
 
 class UserFactory(factory.Factory):
